@@ -2,40 +2,44 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Flappy Cube</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Flappy Full Screen</title>
     <style>
         body {
             margin: 0;
             padding: 0;
             background-color: #333;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            font-family: 'Arial', sans-serif;
-            overflow: hidden;
+            overflow: hidden; /* Scroll bars hatane ke liye */
+            touch-action: none; /* Mobile par double tap zoom rokne ke liye */
         }
         canvas {
-            border: 4px solid #fff;
-            background-color: #70c5ce; /* Sky Blue background */
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
             display: block;
+            width: 100%;
+            height: 100%;
         }
     </style>
 </head>
 <body>
 
-<canvas id="gameCanvas" width="320" height="480"></canvas>
+<canvas id="gameCanvas"></canvas>
 
 <script>
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
 
-    // Game Variables
+    // --- SCREEN RESIZING ---
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas(); // Initial call
+
+    // --- VARIABLES ---
     let frames = 0;
     const DEGREE = Math.PI / 180;
 
-    // Game State
+    // --- GAME STATE ---
     const state = {
         current: 0,
         getReady: 0,
@@ -43,8 +47,11 @@
         over: 2
     };
 
-    // Controls
-    document.addEventListener("click", function(evt) {
+    // --- CONTROLS ---
+    function action(evt) {
+        // Prevent default touch behavior (scrolling)
+        if(evt.type === 'touchstart') evt.preventDefault(); 
+
         switch(state.current) {
             case state.getReady:
                 state.current = state.game;
@@ -56,143 +63,182 @@
                 resetGame();
                 break;
         }
+    }
+    
+    // Support for Click, Touch, and Spacebar
+    window.addEventListener("mousedown", action);
+    window.addEventListener("touchstart", action, {passive: false});
+    window.addEventListener("keydown", (e) => {
+        if(e.code === "Space") action(e);
     });
 
-    document.addEventListener("keydown", function(evt) {
-        if (evt.code === "Space") {
-            switch(state.current) {
-                case state.getReady:
-                    state.current = state.game;
-                    break;
-                case state.game:
-                    bird.flap();
-                    break;
-                case state.over:
-                    resetGame();
-                    break;
-            }
-        }
-    });
-
-    // The Bird Object
+    // --- BIRD OBJECT ---
     const bird = {
         x: 50,
         y: 150,
-        w: 25,
-        h: 25,
-        radius: 12,
+        w: 34,
+        h: 24,
         speed: 0,
-        gravity: 0.25,
-        jump: 4.6,
+        gravity: 0.25,      
+        jump: 4.6,          
+        rotation: 0,        
         
         draw: function() {
-            ctx.fillStyle = "#FFD700"; // Gold Color
-            ctx.strokeStyle = "#000";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); 
-            ctx.fill();
-            ctx.stroke();
+            ctx.save();
+            // Bird ko thoda screen ke left side mein rakhte hain relative to width
+            let drawX = Math.min(canvas.width * 0.2, 100); 
             
+            ctx.translate(drawX, this.y);
+            ctx.rotate(this.rotation);
+
+            // Body
+            ctx.fillStyle = "#FFD700"; 
+            ctx.fillRect(-this.w/2, -this.h/2, this.w, this.h);
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = "#000";
+            ctx.strokeRect(-this.w/2, -this.h/2, this.w, this.h);
+
             // Eye
-            ctx.fillStyle = "#fff";
-            ctx.beginPath();
-            ctx.arc(this.x + 5, this.y - 5, 4, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-        },
-        
-        update: function() {
-            // Physics
-            if (state.current == state.getReady) {
-                this.y = 150; // Reset position
-            } else {
-                this.speed += this.gravity;
-                this.y += this.speed;
-                
-                // Floor Collision
-                if (this.y + this.radius >= canvas.height - fg.h) {
-                    this.y = canvas.height - fg.h - this.radius;
-                    state.current = state.over;
-                }
-            }
+            ctx.fillStyle = "#FFF";
+            ctx.fillRect(2, -8, 10, 10);
+            ctx.strokeRect(2, -8, 10, 10);
+            ctx.fillStyle = "#000";
+            ctx.fillRect(8, -5, 2, 2);
+
+            // Beak
+            ctx.fillStyle = "#FF4500"; 
+            ctx.fillRect(6, 4, 14, 8);
+            ctx.strokeRect(6, 4, 14, 8);
+
+            ctx.restore();
         },
         
         flap: function() {
             this.speed = -this.jump;
+        },
+        
+        update: function() {
+            // Bird starts at 1/3rd of screen height or center
+            let startY = canvas.height / 2 - 50;
+
+            if (state.current == state.getReady) {
+                this.y = startY - 10 * Math.cos(frames * 0.1);
+                this.rotation = 0;
+            } else {
+                this.speed += this.gravity;
+                this.y += this.speed;
+
+                // Rotation Logic
+                if(this.speed < this.jump/2) {
+                    this.rotation = -25 * DEGREE;
+                } else {
+                    this.rotation += 5 * DEGREE;
+                    if(this.rotation > 90 * DEGREE) this.rotation = 90 * DEGREE; 
+                }
+
+                // Floor Collision
+                if (this.y + this.h/2 >= canvas.height - fg.h) {
+                    this.y = canvas.height - fg.h - this.h/2;
+                    if(state.current == state.game) {
+                        state.current = state.over;
+                    }
+                }
+            }
         }
     };
 
-    // Background
+    // --- BACKGROUND ---
     const bg = {
         draw: function() {
             ctx.fillStyle = "#70c5ce";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Clouds (simple circles)
-            ctx.fillStyle = "#fff";
-            ctx.beginPath(); ctx.arc(100, 300, 30, 0, Math.PI*2); ctx.fill();
-            ctx.beginPath(); ctx.arc(140, 310, 40, 0, Math.PI*2); ctx.fill();
-            ctx.beginPath(); ctx.arc(250, 100, 30, 0, Math.PI*2); ctx.fill();
+            // Draw some clouds
+            ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+            ctx.beginPath();
+            ctx.arc(100, canvas.height - 200, 30, 0, Math.PI*2);
+            ctx.arc(140, canvas.height - 190, 40, 0, Math.PI*2);
+            ctx.arc(180, canvas.height - 200, 30, 0, Math.PI*2);
+            ctx.fill();
         }
     };
 
-    // Foreground (Ground)
+    // --- FOREGROUND (Ground) ---
     const fg = {
-        h: 80, 
+        h: 100, // Thoda uncha ground mobile ke liye
         x: 0,
         dx: 2,
         draw: function() {
             ctx.fillStyle = "#ded895";
             ctx.fillRect(0, canvas.height - this.h, canvas.width, this.h);
             
-            // Grass line
             ctx.fillStyle = "#73bf2e";
             ctx.fillRect(0, canvas.height - this.h, canvas.width, 15);
+            
+            ctx.strokeStyle = "#558c22";
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height - this.h + 15);
+            ctx.lineTo(canvas.width, canvas.height - this.h + 15);
+            ctx.stroke();
         },
         update: function() {
             if (state.current == state.game) {
-                this.x = (this.x - this.dx) % (canvas.width/2);
+                this.x = (this.x - this.dx) % 20; 
             }
         }
     };
 
-    // Pipes
+    // --- PIPES ---
     const pipes = {
         position: [],
-        w: 53,
-        h: 400,
-        gap: 100, // Space between pipes
-        dx: 2,
+        w: 60,  // Thoda chauda pipe
+        gap: 120, // Mobile par easy khelne ke liye gap
+        dx: 3, // Thodi speed badhayi hai smooth feel ke liye
         
         draw: function() {
             for (let i = 0; i < this.position.length; i++) {
                 let p = this.position[i];
                 let topY = p.y;
-                let bottomY = p.y + this.h + this.gap;
+                let bottomY = p.y + p.h + this.gap;
                 
-                // Pipe Color
+                // Pipe Body
                 ctx.fillStyle = "#73bf2e";
-                ctx.strokeStyle = "#000";
+                ctx.fillRect(p.x, topY, this.w, p.h); // Top
+                ctx.fillRect(p.x, bottomY, this.w, canvas.height - bottomY - fg.h); // Bottom
                 
-                // Top Pipe
-                ctx.fillRect(p.x, topY, this.w, this.h);
-                ctx.strokeRect(p.x, topY, this.w, this.h);
-                
-                // Bottom Pipe
-                ctx.fillRect(p.x, bottomY, this.w, this.h);
-                ctx.strokeRect(p.x, bottomY, this.w, this.h);
+                // Borders
+                ctx.strokeStyle = "#555";
+                ctx.lineWidth = 2;
+                ctx.strokeRect(p.x, topY, this.w, p.h);
+                ctx.strokeRect(p.x, bottomY, this.w, canvas.height - bottomY - fg.h);
+
+                // Caps
+                let capHeight = 25;
+                // Top Cap
+                ctx.fillStyle = "#73bf2e";
+                ctx.fillRect(p.x - 4, topY + p.h - capHeight, this.w + 8, capHeight);
+                ctx.strokeRect(p.x - 4, topY + p.h - capHeight, this.w + 8, capHeight);
+                // Bottom Cap
+                ctx.fillRect(p.x - 4, bottomY, this.w + 8, capHeight);
+                ctx.strokeRect(p.x - 4, bottomY, this.w + 8, capHeight);
             }
         },
         
         update: function() {
             if (state.current !== state.game) return;
             
-            // Add new pipe every 100 frames
-            if (frames % 100 == 0) {
+            // Spawning Logic (distance based on screen width)
+            // Har 100 frames par nahi, balki distance ke hisab se spawn karenge
+            if (frames % 100 == 0) { 
+                // Pipe height calculation based on screen height
+                let minPipeH = canvas.height * 0.1; 
+                let maxPipeH = canvas.height - fg.h - this.gap - minPipeH;
+                let randomH = Math.floor(Math.random() * (maxPipeH - minPipeH + 1) + minPipeH);
+
                 this.position.push({
                     x: canvas.width,
-                    y: -150 * (Math.random() + 1)
+                    y: 0, 
+                    h: randomH
                 });
             }
             
@@ -200,64 +246,86 @@
                 let p = this.position[i];
                 p.x -= this.dx;
 
-                // Collision Detection Logic
-                let bottomPipeY = p.y + this.h + this.gap;
+                // Collision Variables
+                let birdX = Math.min(canvas.width * 0.2, 100); // Bird ki fixed screen position
                 
-                // Check if bird hits pipe
-                if (
-                    bird.x + bird.radius > p.x && 
-                    bird.x - bird.radius < p.x + this.w && 
-                    (bird.y - bird.radius < p.y + this.h || bird.y + bird.radius > bottomPipeY)
-                ) {
+                // Collision Logic
+                // 1. Top Pipe
+                if (birdX + bird.w/2 > p.x && birdX - bird.w/2 < p.x + this.w && 
+                    bird.y - bird.h/2 < p.h) {
+                    state.current = state.over;
+                }
+                // 2. Bottom Pipe
+                if (birdX + bird.w/2 > p.x && birdX - bird.w/2 < p.x + this.w && 
+                    bird.y + bird.h/2 > p.h + this.gap) {
                     state.current = state.over;
                 }
 
-                // Remove pipes that go off screen
                 if (p.x + this.w <= 0) {
                     this.position.shift();
-                    score.value += 1; // Increase Score
+                    score.value += 1;
+                    score.best = Math.max(score.value, score.best);
                 }
             }
         }
     };
 
-    // Score
+    // --- SCORE ---
     const score = {
-        best: 0, // Not saving to local storage in this simple version
+        best: localStorage.getItem('flappy_full_best') || 0,
         value: 0,
         
         draw: function() {
             ctx.fillStyle = "#FFF";
             ctx.strokeStyle = "#000";
-            
-            if (state.current == state.game) {
-                ctx.lineWidth = 2;
-                ctx.font = "35px Impact";
-                ctx.fillText(this.value, canvas.width / 2, 50);
-                ctx.strokeText(this.value, canvas.width / 2, 50);
-            } else if (state.current == state.over) {
-                // Game Over Score
-                ctx.font = "25px Impact";
-                ctx.fillText("Score: " + this.value, canvas.width / 2 - 40, 180);
-                ctx.strokeText("Score: " + this.value, canvas.width / 2 - 40, 180);
-                
-                ctx.font = "40px Impact";
-                ctx.fillText("GAME OVER", 60, 250);
-                ctx.strokeText("GAME OVER", 60, 250);
+            ctx.lineWidth = 2;
+            ctx.textAlign = "center";
 
-                ctx.font = "20px Arial";
+            if (state.current == state.game) {
+                ctx.font = "bold 60px Arial";
+                ctx.fillText(this.value, canvas.width / 2, 100);
+                ctx.strokeText(this.value, canvas.width / 2, 100);
+            } else if (state.current == state.over) {
+                
+                // Box background
+                let boxW = 300;
+                let boxH = 250;
+                let boxX = canvas.width/2 - boxW/2;
+                let boxY = canvas.height/2 - boxH/2;
+
+                ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+                ctx.fillRect(boxX, boxY, boxW, boxH);
+                ctx.strokeStyle = "#333";
+                ctx.strokeRect(boxX, boxY, boxW, boxH);
+                
                 ctx.fillStyle = "#000";
-                ctx.fillText("Click to Restart", 90, 300);
+                ctx.font = "30px Impact";
+                ctx.fillText("SCORE", canvas.width/2, boxY + 50);
+                ctx.font = "50px Impact";
+                ctx.fillText(this.value, canvas.width/2, boxY + 100);
+                
+                ctx.fillStyle = "#e8802e";
+                ctx.font = "25px Impact";
+                ctx.fillText("BEST: " + this.best, canvas.width/2, boxY + 150);
+                localStorage.setItem('flappy_full_best', this.best);
+
+                ctx.fillStyle = "#555";
+                ctx.font = "20px Arial";
+                ctx.fillText("Tap to Restart", canvas.width/2, boxY + 220);
+
             } else if (state.current == state.getReady) {
                 ctx.fillStyle = "#000";
+                ctx.font = "40px Impact";
+                ctx.fillText("GET READY", canvas.width/2, canvas.height/2 - 50);
                 ctx.font = "20px Arial";
-                ctx.fillText("Click or Space to Start", 60, 240);
+                ctx.fillText("Tap to Fly", canvas.width/2, canvas.height/2);
             }
         }
     };
 
     function resetGame() {
         bird.speed = 0;
+        bird.rotation = 0;
         pipes.position = [];
         score.value = 0;
         frames = 0;
